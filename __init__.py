@@ -13,8 +13,7 @@ from utils import read_json, read_txt
 from utils.components import (
     update_components_for_sampler_change,
     update_components_for_sm_change,
-    update_from_height,
-    update_from_width,
+    update_from_width_or_height,
 )
 from utils.logger import logger
 from utils.variable import MODELS, NOISE_SCHEDULE, SAMPLER, UC_PRESET
@@ -46,8 +45,14 @@ def plugin():
                 )
                 with gr.Column(scale=1):
                     furry_mode = gr.Button("🌸", visible=True)
-                    furry_mode.click(lambda x: "🐾" if x == "🌸" else "🌸", inputs=furry_mode, outputs=furry_mode)
-                    add_quality_tags = gr.Checkbox(value=True, label="添加质量词", interactive=True)
+                    furry_mode.click(
+                        lambda x: "🐾" if x == "🌸" else "🌸",
+                        inputs=furry_mode,
+                        outputs=furry_mode,
+                    )
+                    add_quality_tags = gr.Checkbox(
+                        value=True, label="添加质量词", interactive=True
+                    )
                     gr.Markdown("<hr>")
                     artists_position = gr.Radio(
                         ["最前面", "最后面", "自定义"],
@@ -73,7 +78,10 @@ def plugin():
                             "nai-diffusion-4-5-full": [],
                             "nai-diffusion-4-5-curated": ["Furry Focus"],
                             "nai-diffusion-4-full": ["Furry Focus", "Human Focus"],
-                            "nai-diffusion-4-curated-preview": ["Furry Focus", "Human Focus"],
+                            "nai-diffusion-4-curated-preview": [
+                                "Furry Focus",
+                                "Human Focus",
+                            ],
                             "nai-diffusion-3": ["Furry Focus"],
                             "nai-diffusion-furry-3": ["Furry Focus", "Human Focus"],
                         }.get("nai-diffusion-4-5-full", [])
@@ -130,14 +138,14 @@ def plugin():
                         outputs=[width, height],
                     )
                     width.change(
-                        fn=update_from_width,
+                        fn=update_from_width_or_height,
                         inputs=[width, height, resolution],
-                        outputs=resolution,
+                        outputs=[resolution, gr.Radio(visible=False)],
                     )
                     height.change(
-                        fn=update_from_height,
+                        fn=update_from_width_or_height,
                         inputs=[width, height, resolution],
-                        outputs=resolution,
+                        outputs=[resolution, gr.Radio(visible=False)],
                     )
                     steps = gr.Slider(
                         minimum=1,
@@ -190,13 +198,17 @@ def plugin():
                         )
                         sm.change(update_components_for_sm_change, sm, sm_dyn)
                     with gr.Row():
-                        seed = gr.Textbox(value="-1", label="种子", interactive=True, scale=4)
+                        seed = gr.Textbox(
+                            value="-1", label="种子", interactive=True, scale=4
+                        )
                     with gr.Row(scale=1):
                         last_seed = gr.Button(value="♻️", size="sm")
                         random_seed = gr.Button(value="🎲", size="sm")
                         last_seed.click(
                             lambda: (
-                                read_json("last.json")["parameters"]["seed"] if os.path.exists("last.json") else "-1"
+                                read_json("last.json")["parameters"]["seed"]
+                                if os.path.exists("last.json")
+                                else "-1"
                             ),
                             outputs=seed,
                         )
@@ -213,7 +225,11 @@ def plugin():
                         label="调度器",
                         interactive=True,
                     )
-                    sampler.change(update_components_for_sampler_change, inputs=sampler, outputs=[noise_schedule, sm])
+                    sampler.change(
+                        update_components_for_sampler_change,
+                        inputs=sampler,
+                        outputs=[noise_schedule, sm],
+                    )
                     legacy_uc = gr.Checkbox(
                         value=False,
                         label="Legacy Prompt Conditioning Mode",
@@ -235,7 +251,9 @@ def plugin():
                     )
                 with gr.Column():
                     gr.Markdown("① 该处参数设置与左侧主页文生图出参数设置不通用")
-                    gr.Markdown("② 复选框类参数勾选后每次生图默认有 50% 的概率启用, 可以去概率设置中设置修改为 100%")
+                    gr.Markdown(
+                        "② 复选框类参数勾选后每次生图默认有 50% 的概率启用, 可以去概率设置中设置修改为 100%"
+                    )
                     gr.Markdown("③ 数值类参数目前仅可设置为固定值")
                     gr.Markdown("④ 下拉列表中可设置对应参数为随机")
                     gr.Markdown("③ 当选择不同模型时可设置的参数会发生改变")
@@ -257,36 +275,76 @@ def plugin():
         with gr.Tab("概率设置"):
             with gr.Row():
                 with gr.Column(scale=1):
-                    min_artists_num = gr.Slider(1, 10, value=2, label="最少抽取画师数量", interactive=True)
-                    max_artists_num = gr.Slider(2, 20, value=10, label="最多抽取画师数量", interactive=True)
+                    min_artists_num = gr.Slider(
+                        1, 10, value=2, label="最少抽取画师数量", interactive=True
+                    )
+                    max_artists_num = gr.Slider(
+                        2, 20, value=10, label="最多抽取画师数量", interactive=True
+                    )
 
-                    years = gr.CheckboxGroup(["year_2022", "year_2023", "year_2024", "year_2025"], show_label=False)
+                    years = gr.CheckboxGroup(
+                        ["year_2022", "year_2023", "year_2024", "year_2025"],
+                        show_label=False,
+                    )
 
                     gr.Markdown("<hr>")
                     enable_random_weight = gr.Checkbox(False, label="随机权重")
-                    prod_mode = gr.Radio(["新版权重", "旧版权重"], value="新版权重", show_label=False, visible=False)
+                    prod_mode = gr.Radio(
+                        ["新版权重", "旧版权重"],
+                        value="新版权重",
+                        show_label=False,
+                        visible=False,
+                    )
 
                     random_weight = gr.Column(visible=False)
                     with random_weight:
                         new_prod = gr.Column()
                         with new_prod:
-                            min_weight = gr.Slider(-5, 1, value=-3, step=1, label="下界")
+                            min_weight = gr.Slider(
+                                -5, 1, value=-3, step=1, label="下界"
+                            )
                             max_weight = gr.Slider(-1, 5, value=3, step=1, label="上界")
                             mode = gr.Slider(-5, 5, value=1, step=1, label="众数")
-                            left_sharpness = gr.Slider(1, 20, value=10, step=1, label="众数左侧数据离散程度")
-                            right_sharpness = gr.Slider(1, 20, value=5, step=1, label="众数右侧数据离散程度")
-                            prob_neg_to_pos = gr.Slider(0, 1, value=0.7, step=0.01, label="负数转化概率")
+                            left_sharpness = gr.Slider(
+                                1, 20, value=10, step=1, label="众数左侧数据离散程度"
+                            )
+                            right_sharpness = gr.Slider(
+                                1, 20, value=5, step=1, label="众数右侧数据离散程度"
+                            )
+                            prob_neg_to_pos = gr.Slider(
+                                0, 1, value=0.7, step=0.01, label="负数转化概率"
+                            )
                             prob_zero_to_one_add = gr.Slider(
-                                0, 1, value=0.35, step=0.01, label="数集 [0, 1] 增加 0.5 的概率"
+                                0,
+                                1,
+                                value=0.35,
+                                step=0.01,
+                                label="数集 [0, 1] 增加 0.5 的概率",
                             )
                             refresh_button = gr.Button("刷新数据分布图")
 
                         old_prob = gr.Column(visible=False)
                         with old_prob:
-                            min_num = gr.Slider(0, 9, 0, step=1, label="最少添加括号次数", interactive=True)
-                            max_num = gr.Slider(1, 10, 3, step=1, label="最多添加括号次数", interactive=True)
+                            min_num = gr.Slider(
+                                0,
+                                9,
+                                0,
+                                step=1,
+                                label="最少添加括号次数",
+                                interactive=True,
+                            )
+                            max_num = gr.Slider(
+                                1,
+                                10,
+                                3,
+                                step=1,
+                                label="最多添加括号次数",
+                                interactive=True,
+                            )
                             use_parentheses = gr.CheckboxGroup(
-                                ["使用[]", "使用{}"], value=["使用[]", "使用{}"], show_label=False
+                                ["使用[]", "使用{}"],
+                                value=["使用[]", "使用{}"],
+                                show_label=False,
                             )
 
                     prod_mode.change(
@@ -322,13 +380,23 @@ def plugin():
                         "关于展示的直方图忽高忽低, 原因是因为我对生成的随机数进行了处理, 生成的随机数最多为 2 位小数, 当生成一个 2 位小数且第 2 位小数为 5 时, 不做任何处理, 否则使用四舍五入的规则进位或退位, 因此 2 位小数的数据量较少, 导致频数较低, 可以根据核密度估计曲线更平滑地查看数据分布"
                     )
                     gr.Markdown("<hr>")
-                    gr.Markdown("关于旧版权重: 旧版权重更加适用于 nai-diffusion-3 或 nai-diffusion-furry-3 等旧模型")
+                    gr.Markdown(
+                        "关于旧版权重: 旧版权重更加适用于 nai-diffusion-3 或 nai-diffusion-furry-3 等旧模型"
+                    )
 
                 enable_random_weight.change(
                     lambda x: (
-                        (gr.update(visible=True), gr.update(visible=True), gr.update(visible=True))
+                        (
+                            gr.update(visible=True),
+                            gr.update(visible=True),
+                            gr.update(visible=True),
+                        )
                         if x
-                        else (gr.update(visible=False), gr.update(visible=False), gr.update(visible=False))
+                        else (
+                            gr.update(visible=False),
+                            gr.update(visible=False),
+                            gr.update(visible=False),
+                        )
                     ),
                     inputs=enable_random_weight,
                     outputs=[random_weight, prod_mode, explanation],
@@ -435,4 +503,6 @@ def plugin():
             ],
             outputs=[output_prompt, output_image],
         )
-        stop_button.click(lambda: logger.warning("正在停止生成..."), None, None, cancels=[cancel])
+        stop_button.click(
+            lambda: logger.warning("正在停止生成..."), None, None, cancels=[cancel]
+        )
