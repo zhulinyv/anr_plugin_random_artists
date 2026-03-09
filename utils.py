@@ -226,6 +226,7 @@ def generate_random_artists(
     min_num,
     max_num,
     use_parentheses,
+    add_artist
 ):
     logger.info("正在生成图片...")
 
@@ -240,9 +241,11 @@ def generate_random_artists(
         artist = random_line_skip_blank(artists_area)
         while artist in artists_string:
             artist = random_line_skip_blank(artists_area)
+        if add_artist:
+            artist = f"artist:{artist}"
         if enable_random_weight:
             if prod_mode == "新版权重":
-                artists_string += f"{generate_piecewise_beta(min_weight, max_weight, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add)}::{artist}::,"
+                artists_string += f"{generate_piecewise_beta(min_weight, max_weight, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add)}::{artist},::, "
             else:
                 parentheses_list = []
                 if "使用[]" in use_parentheses:
@@ -251,7 +254,7 @@ def generate_random_artists(
                     parentheses_list.append(["{", "}"])
                 num = random.randint(min_num, max_num)
                 symbol = random.choice(parentheses_list) if parentheses_list is not None else ["", ""]
-                artists_string = artists_string + symbol[0] * num + artist + symbol[1] * num + ","
+                artists_string = artists_string + symbol[0] * num + artist + symbol[1] * num + ", "
         else:
             artists_string += f"{artist},"
 

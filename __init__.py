@@ -259,12 +259,14 @@ def plugin():
                     gr.Markdown("③ 当选择不同模型时可设置的参数会发生改变")
         with gr.Tab("画师设置"):
             with gr.Row():
-                artists_area = gr.TextArea(
-                    read_txt("./plugins/anr_plugin_random_artists/artists.txt"),
-                    label="单画师提示词或光影质量提示词等",
-                    lines=30,
-                    interactive=True,
-                )
+                with gr.Column():
+                    artists_area = gr.TextArea(
+                        read_txt("./plugins/anr_plugin_random_artists/artists.txt"),
+                        label="单画师提示词或光影质量提示词等",
+                        lines=30,
+                        interactive=True,
+                    )
+                    add_artist = gr.Checkbox(False, label="artist 前缀")
                 with gr.Column():
                     gr.Markdown(
                         "该插件运行时会按照设定值抽取一定数量的行通过改变权重组成画风串, 每次启动时会加载位于 ./plugins/anr_plugin_random_artists 目录下的 artists.txt, 若不想每次启动后都修改左侧文本区域中的画师提示词可以修改后点击保存文件, 若想还原该文件的修改只需将 artists_backup.txt 文件内容复制到 artists.txt"
@@ -456,6 +458,7 @@ def plugin():
                 min_num,
                 max_num,
                 use_parentheses,
+                add_artist,
             ],
             outputs=[output_prompt, output_image],
             show_progress=False,
@@ -500,6 +503,7 @@ def plugin():
                 min_num,
                 max_num,
                 use_parentheses,
+                add_artist,
             ],
             outputs=[output_prompt, output_image],
         )
