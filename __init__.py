@@ -7,13 +7,13 @@ from plugins.anr_plugin_random_artists.utils import (
     save_txt,
     update_components_for_models_change,
     update_from_dropdown,
+    update_from_width_or_height,
     visualize_beta_distribution,
 )
 from utils import read_json, read_txt
 from utils.components import (
     update_components_for_sampler_change,
     update_components_for_sm_change,
-    update_from_width_or_height,
 )
 from utils.logger import logger
 from utils.variable import MODELS, NOISE_SCHEDULE, SAMPLER, UC_PRESET
@@ -106,6 +106,7 @@ def plugin():
                         choices=[
                             "832x1216",
                             "1216x832",
+                            "1024x1024",
                             "512x768",
                             "768x768",
                             "640x640",

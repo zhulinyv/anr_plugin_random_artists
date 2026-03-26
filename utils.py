@@ -357,3 +357,32 @@ def generate_random_artists(
         logger.info("正在重试...")
 
     return artists_string, path
+
+
+def get_resolution_from_sliders(width, height):
+    current_res = f"{int(width)}x{int(height)}"
+    if current_res in [
+        "832x1216",
+        "1216x832",
+        "1024x1024",
+        "512x768",
+        "768x768",
+        "640x640",
+    ]:
+        return current_res
+    else:
+        return "自定义"
+
+
+def update_from_width_or_height(width, height, current_resolution):
+    new_resolution = get_resolution_from_sliders(width, height)
+
+    if width * height <= 512 * 768:
+        choices = ["1x", "1.5x", "2x"]
+    else:
+        choices = ["1x", "1.5x"]
+
+    if new_resolution != current_resolution:
+        return new_resolution, gr.update(choices=choices, value="1x")
+    else:
+        return gr.update(), gr.update(choices=choices, value="1x")
