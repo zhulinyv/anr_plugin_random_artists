@@ -10,7 +10,7 @@ from plugins.anr_plugin_random_artists.utils import (
     update_from_width_or_height,
     visualize_beta_distribution,
 )
-from utils import read_json, read_txt
+from utils import generate_random_str, read_json, read_txt
 from utils.components import (
     update_components_for_sampler_change,
     update_components_for_sm_change,
@@ -258,6 +258,17 @@ def plugin():
                     gr.Markdown("③ 数值类参数目前仅可设置为固定值")
                     gr.Markdown("④ 下拉列表中可设置对应参数为随机")
                     gr.Markdown("③ 当选择不同模型时可设置的参数会发生改变")
+
+                    vibe_file = gr.File(
+                        type="filepath",
+                        label="*.naiv4vibebundle",
+                        visible=False,
+                        interactive=True,
+                    )
+                    vibe_button = gr.Button(generate_random_str(8))
+                    vibe_state = gr.State(0)
+                    vibe_button.click(lambda x: x + 1 if x < 5 else 0, vibe_state, vibe_state)
+                    vibe_state.change(lambda x: gr.update(visible=True) if x == 5 else gr.update(value=None, visible=False), vibe_state, vibe_file)
         with gr.Tab("画师设置"):
             with gr.Row():
                 with gr.Column():
@@ -460,6 +471,7 @@ def plugin():
                 max_num,
                 use_parentheses,
                 add_artist,
+                vibe_file
             ],
             outputs=[output_prompt, output_image],
             show_progress=False,
@@ -505,6 +517,7 @@ def plugin():
                 max_num,
                 use_parentheses,
                 add_artist,
+                vibe_file
             ],
             outputs=[output_prompt, output_image],
         )

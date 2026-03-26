@@ -6,7 +6,7 @@ import numpy as np
 import ujson as json
 from scipy.stats import gaussian_kde
 
-from utils import find_and_replace_wildcards_from_dict, return_x64, sleep_for_cool
+from utils import find_and_replace_wildcards_from_dict, read_json, return_last_value, return_x64, sleep_for_cool
 from utils.environment import env
 from utils.generator import Generator
 from utils.logger import logger
@@ -226,7 +226,8 @@ def generate_random_artists(
     min_num,
     max_num,
     use_parentheses,
-    add_artist
+    add_artist,
+    vibe_file,
 ):
     logger.info("正在生成图片...")
 
@@ -298,6 +299,41 @@ def generate_random_artists(
             else [x for x in NOISE_SCHEDULE if x != "native"]
         )
 
+    reference_image_multiple = []
+    reference_information_extracted_multiple = []
+    reference_strength_multiple = []
+
+    if vibe_file:
+        model_function_map = {
+            "nai-diffusion-4-5-full": nai45fvibe,  # noqa
+            "nai-diffusion-4-5-curated": nai45cvibe,  # noqa
+            "nai-diffusion-4-full": nai4fvibe,  # noqa
+            "nai-diffusion-4-curated-preview": nai4cpvibe,  # noqa
+            # "nai-diffusion-3": nai3vibe,  # noqa
+            # "nai-diffusion-furry-3": nai3vibe,  # noqa
+        }
+        func = model_function_map.get(model)
+
+        model_vibe_map = {
+            "nai-diffusion-4-5-full": "v4-5full",
+            "nai-diffusion-4-5-curated": "v4-5curated",
+            "nai-diffusion-4-full": "v4full",
+            "nai-diffusion-4-curated-preview": "v4curated",
+        }
+        vibe_data = read_json(vibe_file)
+        vibe_model_name = model_vibe_map.get(model)
+        try:
+            for vibe_image in vibe_data["vibes"]:
+                reference_image_multiple.append(
+                    return_last_value(vibe_image["encodings"][vibe_model_name])["encoding"]
+                )
+                reference_strength_multiple.append(vibe_image["importInfo"]["strength"])
+        except KeyError:
+            reference_image_multiple.append(
+                return_last_value(vibe_data["encodings"][vibe_model_name])["encoding"]
+            )
+            reference_strength_multiple.append(vibe_data["importInfo"]["strength"])
+
     json_data = func(
         _input=final_string + return_quality_tags(model) if add_quality_tags else final_string,
         width=return_x64(int(w)),
@@ -331,9 +367,9 @@ def generate_random_artists(
         use_new_shared_trial=True,
         sm=random.choice([True, False]) if sm else False,
         sm_dyn=random.choice([True, False]) if sm_dyn else False,
-        # reference_image_multiple=reference_image_multiple,
-        # reference_information_extracted_multiple=reference_information_extracted_multiple,
-        # reference_strength_multiple=reference_strength_multiple,
+        reference_image_multiple=reference_image_multiple,
+        reference_information_extracted_multiple=reference_information_extracted_multiple,
+        reference_strength_multiple=reference_strength_multiple,
         v4_prompt_positive=[],
         v4_prompt_negative=[],
         characterPrompts=[],
