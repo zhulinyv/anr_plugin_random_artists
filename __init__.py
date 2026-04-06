@@ -25,14 +25,8 @@ def plugin():
             with gr.Row():
                 generate_button = gr.Button("开始生成")
                 stop_button = gr.Button("停止生成")
-            gr.Markdown(
-                "停止生成会等待最后一张图片生成完毕, 并不会立刻停止, 如果遇到无法停止生成的情况, 浏览器刷新 ANR 页面即可"
-            )
             output_prompt = gr.Textbox(label="本次随机的画风串", interactive=False)
             output_image = gr.Image(label="随机画风串生成的图片", interactive=False)
-            gr.Markdown(
-                "建议长时间运行时在浏览器设置中将 ANR 地址添加到睡眠白名单, 否则可能会导致一段时间后无法继续生成图片"
-            )
 
         with gr.Tab("提示词设置"):
             with gr.Row():
@@ -430,7 +424,7 @@ def plugin():
                     outputs=prob_image,
                 )
 
-        cancel = output_image.change(
+        gen_event = generate_button.click(
             generate_random_artists,
             inputs=[
                 model,
@@ -471,56 +465,13 @@ def plugin():
                 max_num,
                 use_parentheses,
                 add_artist,
-                vibe_file
-            ],
-            outputs=[output_prompt, output_image],
-            show_progress=False,
-        )
-        generate_button.click(
-            generate_random_artists,
-            inputs=[
-                model,
-                artists_positive,
-                artists_position,
-                artists_negative,
-                undesired_contentc_preset,
-                furry_mode,
-                add_quality_tags,
-                resolution,
-                width,
-                height,
-                steps,
-                prompt_guidance,
-                prompt_guidance_rescale,
-                variety,
-                decrisp,
-                sm,
-                sm_dyn,
-                seed,
-                sampler,
-                noise_schedule,
-                legacy_uc,
-                artists_area,
-                min_artists_num,
-                max_artists_num,
-                years,
-                enable_random_weight,
-                prod_mode,
-                min_weight,
-                max_weight,
-                mode,
-                left_sharpness,
-                right_sharpness,
-                prob_neg_to_pos,
-                prob_zero_to_one_add,
-                min_num,
-                max_num,
-                use_parentheses,
-                add_artist,
-                vibe_file
+                vibe_file,
             ],
             outputs=[output_prompt, output_image],
         )
         stop_button.click(
-            lambda: logger.warning("正在停止生成..."), None, None, cancels=[cancel]
+            lambda: logger.warning("正在停止生成，等待当前图片完成..."),
+            None,
+            None,
+            cancels=[gen_event],
         )

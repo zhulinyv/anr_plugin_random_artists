@@ -1,4 +1,5 @@
 import random
+import time
 
 import gradio as gr
 import matplotlib.pyplot as plt
@@ -6,7 +7,14 @@ import numpy as np
 import ujson as json
 from scipy.stats import gaussian_kde
 
-from utils import find_and_replace_wildcards_from_dict, read_json, return_last_value, return_x64, sleep_for_cool
+from utils import (
+    find_and_replace_wildcards_from_dict,
+    format_str,
+    read_json,
+    return_last_value,
+    return_x64,
+    sleep_for_cool,
+)
 from utils.environment import env
 from utils.generator import Generator
 from utils.logger import logger
@@ -190,13 +198,13 @@ def update_from_dropdown(resolution_choice):
 
 def generate_random_artists(
     model,
-    artists_positive: str,
+    artists_positive,
     artists_position,
     artists_negative,
     undesired_contentc_preset,
     furry_mode,
     add_quality_tags,
-    resolution: str,
+    resolution,
     width,
     height,
     steps,
@@ -210,7 +218,7 @@ def generate_random_artists(
     sampler,
     noise_schedule,
     legacy_uc,
-    artists_area: str,
+    artists_area,
     min_artists_num,
     max_artists_num,
     years,
@@ -229,170 +237,226 @@ def generate_random_artists(
     add_artist,
     vibe_file,
 ):
-    logger.info("正在生成图片...")
+    # 开启后端循环
+    while 1:
+        logger.info("正在生成图片...")
 
-    if furry_mode == "🐾" and model not in ["nai-diffusion-3", "nai-diffusion-furry-3"]:
-        artists_positive = "fur dataset, " + artists_positive
+        if furry_mode == "🐾" and model not in [
+            "nai-diffusion-3",
+            "nai-diffusion-furry-3",
+        ]:
+            artists_positive = "fur dataset, " + artists_positive
 
-    artists_num = random.randint(min_artists_num, max_artists_num)
+        lines = artists_area.splitlines()
+        non_blank_artists = [line.strip() for line in lines if line.strip() != ""]
+        if not non_blank_artists:
+            non_blank_artists = [""]
 
-    artists_string = ""
+        target_num = random.randint(min_artists_num, max_artists_num)
+        actual_artists_num = min(target_num, len(non_blank_artists))
 
-    for i in range(artists_num):
-        artist = random_line_skip_blank(artists_area)
-        while artist in artists_string:
-            artist = random_line_skip_blank(artists_area)
-        if add_artist:
-            artist = f"artist:{artist}"
-        if enable_random_weight:
-            if prod_mode == "新版权重":
-                artists_string += f"{generate_piecewise_beta(min_weight, max_weight, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add)}::{artist},::, "
+        selected_artists = random.sample(non_blank_artists, actual_artists_num)
+        artists_string = ""
+
+        for artist in selected_artists:
+            if add_artist:
+                artist = f"artist:{artist}"
+            if enable_random_weight:
+                if prod_mode == "新版权重":
+                    artists_string += f"{generate_piecewise_beta(min_weight, max_weight, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add)}::{artist},::, "
+                else:
+                    parentheses_list = []
+                    if "使用[]" in use_parentheses:
+                        parentheses_list.append(["[", "]"])
+                    if "使用{}" in use_parentheses:
+                        parentheses_list.append(["{", "}"])
+                    num = random.randint(min_num, max_num)
+                    symbol = (
+                        random.choice(parentheses_list)
+                        if parentheses_list
+                        else ["", ""]
+                    )
+                    artists_string = (
+                        artists_string
+                        + symbol[0] * num
+                        + artist
+                        + symbol[1] * num
+                        + ", "
+                    )
             else:
-                parentheses_list = []
-                if "使用[]" in use_parentheses:
-                    parentheses_list.append(["[", "]"])
-                if "使用{}" in use_parentheses:
-                    parentheses_list.append(["{", "}"])
-                num = random.randint(min_num, max_num)
-                symbol = random.choice(parentheses_list) if parentheses_list is not None else ["", ""]
-                artists_string = artists_string + symbol[0] * num + artist + symbol[1] * num + ", "
+                artists_string += f"{artist},"
+
+        for year in years:
+            if random.random() > 0.5:
+                artists_string += f"{year},"
+
+        if artists_position == "最前面":
+            final_string = f"{artists_string},{artists_positive}"
+        elif artists_position == "最后面":
+            final_string = f"{artists_positive},{artists_string}"
         else:
-            artists_string += f"{artist},"
+            final_string = artists_positive.replace("__artists__", f",{artists_string}")
 
-    for year in years:
-        if random.random() > 0.5:
-            artists_string += f"{year},"
-
-    if artists_position == "最前面":
-        final_string = f"{artists_string},{artists_positive}"
-    elif artists_position == "最后面":
-        final_string = f"{artists_positive},{artists_string}"
-    else:
-        final_string = artists_positive.replace("__artists__", f",{artists_string},")
-
-    model_function_map = {
-        "nai-diffusion-4-5-full": nai45ft2i,  # noqa
-        "nai-diffusion-4-5-curated": nai45ct2i,  # noqa
-        "nai-diffusion-4-full": nai4ft2i,  # noqa
-        "nai-diffusion-4-curated-preview": nai4cpt2i,  # noqa
-        "nai-diffusion-3": nai3t2i,  # noqa
-        "nai-diffusion-furry-3": naif3t2i,  # noqa
-    }
-    func = model_function_map.get(model)
-
-    if resolution == "随机":
-        w, h = random.choice(["832x1216", "1024x1024", "1216x832"]).split("x")
-    elif resolution == "自定义":
-        w, h = str(width), str(height)
-    else:
-        w, h = resolution.split("x")
-
-    if sampler == "随机":
-        sampler = random.choice(
-            SAMPLER if model in ["nai-diffusion-3", "nai-diffusion-furry-3"] else [x for x in SAMPLER if x != "ddim_v3"]
-        )
-
-    if noise_schedule == "随机":
-        noise_schedule = random.choice(
-            NOISE_SCHEDULE
-            if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
-            else [x for x in NOISE_SCHEDULE if x != "native"]
-        )
-
-    reference_image_multiple = []
-    reference_information_extracted_multiple = []
-    reference_strength_multiple = []
-
-    if vibe_file:
         model_function_map = {
-            "nai-diffusion-4-5-full": nai45fvibe,  # noqa
-            "nai-diffusion-4-5-curated": nai45cvibe,  # noqa
-            "nai-diffusion-4-full": nai4fvibe,  # noqa
-            "nai-diffusion-4-curated-preview": nai4cpvibe,  # noqa
-            # "nai-diffusion-3": nai3vibe,  # noqa
-            # "nai-diffusion-furry-3": nai3vibe,  # noqa
+            "nai-diffusion-4-5-full": nai45ft2i,  # noqa
+            "nai-diffusion-4-5-curated": nai45ct2i,  # noqa
+            "nai-diffusion-4-full": nai4ft2i,  # noqa
+            "nai-diffusion-4-curated-preview": nai4cpt2i,  # noqa
+            "nai-diffusion-3": nai3t2i,  # noqa
+            "nai-diffusion-furry-3": naif3t2i,  # noqa
         }
         func = model_function_map.get(model)
 
-        model_vibe_map = {
-            "nai-diffusion-4-5-full": "v4-5full",
-            "nai-diffusion-4-5-curated": "v4-5curated",
-            "nai-diffusion-4-full": "v4full",
-            "nai-diffusion-4-curated-preview": "v4curated",
-        }
-        vibe_data = read_json(vibe_file)
-        vibe_model_name = model_vibe_map.get(model)
-        try:
-            for vibe_image in vibe_data["vibes"]:
-                reference_image_multiple.append(
-                    return_last_value(vibe_image["encodings"][vibe_model_name])["encoding"]
-                )
-                reference_strength_multiple.append(vibe_image["importInfo"]["strength"])
-        except KeyError:
-            reference_image_multiple.append(
-                return_last_value(vibe_data["encodings"][vibe_model_name])["encoding"]
+        if resolution == "随机":
+            w, h = random.choice(["832x1216", "1024x1024", "1216x832"]).split("x")
+        elif resolution == "自定义":
+            w, h = str(width), str(height)
+        else:
+            w, h = resolution.split("x")
+
+        current_sampler = sampler
+        if sampler == "随机":
+            current_sampler = random.choice(
+                SAMPLER
+                if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                else [x for x in SAMPLER if x != "ddim_v3"]
             )
-            reference_strength_multiple.append(vibe_data["importInfo"]["strength"])
 
-    json_data = func(
-        _input=final_string + return_quality_tags(model) if add_quality_tags else final_string,
-        width=return_x64(int(w)),
-        height=return_x64(int(h)),
-        scale=prompt_guidance,
-        sampler=sampler,
-        steps=steps,
-        ucPreset=return_uc_preset_data(model)[undesired_contentc_preset],
-        qualityToggle=add_quality_tags,
-        autoSmea=False,
-        dynamic_thresholding=(
-            random.choice([True, False])
-            if (decrisp if model in ["nai-diffusion-3", "nai-diffusion-furry-3"] else False)
-            else False
-        ),
-        legacy=False,
-        add_original_image=True,
-        cfg_rescale=prompt_guidance_rescale,
-        noise_schedule=noise_schedule,
-        legacy_v3_extend=False,
-        skip_cfg_above_sigma=(random.choice([return_skip_cfg_above_sigma(model), None]) if variety else None),
-        use_coords=False,
-        normalize_reference_strength_multiple=True,
-        use_order=True,
-        legacy_uc=legacy_uc if model in ["nai-diffusion-4-full", "nai-diffusion-4-curated-preview"] else False,
-        seed=random.randint(1000000000, 9999999999) if seed == "-1" else int(seed),
-        negative_prompt=return_undesired_contentc_preset(model, undesired_contentc_preset)
-        + (f", {artists_negative}" if undesired_contentc_preset != "None" else artists_negative),
-        deliberate_euler_ancestral_bug=False,  # 仅在采样器为 k_euler_ancestral 时出现
-        prefer_brownian=True,  # 仅在采样器为 k_euler_ancestral 时出现
-        use_new_shared_trial=True,
-        sm=random.choice([True, False]) if sm else False,
-        sm_dyn=random.choice([True, False]) if sm_dyn else False,
-        reference_image_multiple=reference_image_multiple,
-        reference_information_extracted_multiple=reference_information_extracted_multiple,
-        reference_strength_multiple=reference_strength_multiple,
-        v4_prompt_positive=[],
-        v4_prompt_negative=[],
-        characterPrompts=[],
-        # director_reference_images_cached=director_reference_images_cached,
-        # director_reference_descriptions=director_reference_descriptions,
-        # director_reference_information_extracted=director_reference_information_extracted,
-        # director_reference_strength_values=director_reference_strength_values,
-        # director_reference_secondary_strength_values=director_reference_secondary_strength_values,
-    )
+        current_noise_schedule = noise_schedule
+        if noise_schedule == "随机":
+            current_noise_schedule = random.choice(
+                NOISE_SCHEDULE
+                if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                else [x for x in NOISE_SCHEDULE if x != "native"]
+            )
 
-    with open("./outputs/temp_last_origin.json", "w", encoding="utf-8") as file:
-        json.dump(json_data, file, ensure_ascii=False, indent=4)
+        reference_image_multiple = []
+        reference_information_extracted_multiple = []
+        reference_strength_multiple = []
 
-    image_data = None
-    while image_data is None:
-        image_data = generator.generate(find_and_replace_wildcards_from_dict(json_data))
-        sleep_for_cool(env.cool_time)
-        if image_data:
-            path = generator.save(image_data, "text2image", json_data["parameters"]["seed"])
-            break
-        logger.info("正在重试...")
+        if vibe_file:
+            model_function_map = {
+                "nai-diffusion-4-5-full": nai45fvibe,  # noqa
+                "nai-diffusion-4-5-curated": nai45cvibe,  # noqa
+                "nai-diffusion-4-full": nai4fvibe,  # noqa
+                "nai-diffusion-4-curated-preview": nai4cpvibe,  # noqa
+            }
+            func = model_function_map.get(model)
+            model_vibe_map = {
+                "nai-diffusion-4-5-full": "v4-5full",
+                "nai-diffusion-4-5-curated": "v4-5curated",
+                "nai-diffusion-4-full": "v4full",
+                "nai-diffusion-4-curated-preview": "v4curated",
+            }
+            vibe_data = read_json(vibe_file)
+            vibe_model_name = model_vibe_map.get(model)
+            try:
+                for vibe_image in vibe_data["vibes"]:
+                    reference_image_multiple.append(
+                        return_last_value(vibe_image["encodings"][vibe_model_name])[
+                            "encoding"
+                        ]
+                    )
+                    reference_strength_multiple.append(
+                        vibe_image["importInfo"]["strength"]
+                    )
+            except KeyError:
+                reference_image_multiple.append(
+                    return_last_value(vibe_data["encodings"][vibe_model_name])[
+                        "encoding"
+                    ]
+                )
+                reference_strength_multiple.append(vibe_data["importInfo"]["strength"])
 
-    return artists_string, path
+        json_data = func(
+            _input=format_str(
+                final_string + return_quality_tags(model)
+                if add_quality_tags
+                else final_string
+            ),
+            width=return_x64(int(w)),
+            height=return_x64(int(h)),
+            scale=prompt_guidance,
+            sampler=current_sampler,
+            steps=steps,
+            ucPreset=return_uc_preset_data(model)[undesired_contentc_preset],
+            qualityToggle=add_quality_tags,
+            autoSmea=False,
+            dynamic_thresholding=(
+                random.choice([True, False])
+                if (
+                    decrisp
+                    if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                    else False
+                )
+                else False
+            ),
+            legacy=False,
+            add_original_image=True,
+            cfg_rescale=prompt_guidance_rescale,
+            noise_schedule=current_noise_schedule,
+            legacy_v3_extend=False,
+            skip_cfg_above_sigma=(
+                random.choice([return_skip_cfg_above_sigma(model), None])
+                if variety
+                else None
+            ),
+            use_coords=False,
+            normalize_reference_strength_multiple=True,
+            use_order=True,
+            legacy_uc=(
+                legacy_uc
+                if model in ["nai-diffusion-4-full", "nai-diffusion-4-curated-preview"]
+                else False
+            ),
+            seed=random.randint(1000000000, 9999999999) if seed == "-1" else int(seed),
+            negative_prompt=format_str(
+                return_undesired_contentc_preset(model, undesired_contentc_preset)
+                + (
+                    f", {artists_negative}"
+                    if undesired_contentc_preset != "None"
+                    else artists_negative
+                )
+            ),
+            deliberate_euler_ancestral_bug=False,
+            prefer_brownian=True,
+            use_new_shared_trial=True,
+            sm=random.choice([True, False]) if sm else False,
+            sm_dyn=random.choice([True, False]) if sm_dyn else False,
+            reference_image_multiple=reference_image_multiple,
+            reference_information_extracted_multiple=reference_information_extracted_multiple,
+            reference_strength_multiple=reference_strength_multiple,
+            v4_prompt_positive=[],
+            v4_prompt_negative=[],
+            characterPrompts=[],
+        )
+
+        with open("./outputs/temp_last_origin.json", "w", encoding="utf-8") as file:
+            json.dump(json_data, file, ensure_ascii=False, indent=4)
+
+        image_data = None
+        while image_data is None:
+            try:
+                image_data = generator.generate(
+                    find_and_replace_wildcards_from_dict(json_data)
+                )
+            except Exception as e:
+                logger.error(f"网络或请求异常: {e}")
+                image_data = None
+                time.sleep(3)  # 异常保护冷却
+
+            sleep_for_cool(env.cool_time)
+            if image_data:
+                path = generator.save(
+                    image_data, "text2image", json_data["parameters"]["seed"]
+                )
+                break
+            logger.info("正在重试...")
+
+        yield artists_string, path
+
+        # 保护性延时，避免极端情况下死循环占满主线程
+        time.sleep(1.5)
 
 
 def get_resolution_from_sliders(width, height):
