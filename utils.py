@@ -23,9 +23,10 @@ from utils.variable import (
     NOISE_SCHEDULE,
     SAMPLER,
     UC_PRESET,
+    return_quality_preset_id,
     return_quality_tags,
     return_skip_cfg_above_sigma,
-    return_uc_preset_data,
+    return_uc_preset_id,
     return_undesired_contentc_preset,
 )
 
@@ -33,7 +34,13 @@ generator = Generator("https://image.novelai.net/ai/generate-image")
 
 
 def generate_piecewise_beta(
-    a=-3, b=3, mode=0, left_sharpness=5, right_sharpness=5, prob_neg_to_pos=0.0, prob_zero_to_one_add=0.0
+    a=-3,
+    b=3,
+    mode=0,
+    left_sharpness=5,
+    right_sharpness=5,
+    prob_neg_to_pos=0.0,
+    prob_zero_to_one_add=0.0,
 ):
     """
     分段 Beta 分布：左侧用 Beta(alpha_left, beta_left) 缩放到 [a, mode]
@@ -86,7 +93,9 @@ def generate_piecewise_beta(
     return num_2_decimals if num_str[-1] == "5" else round(num_2_decimals, 1)
 
 
-def visualize_beta_distribution(a, b, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add):
+def visualize_beta_distribution(
+    a, b, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add
+):
     data = [
         generate_piecewise_beta(
             a=a,
@@ -137,15 +146,31 @@ def update_components_for_models_change(model):
     _NOISE_SCHEDULE = NOISE_SCHEDULE[:]
     _NOISE_SCHEDULE.remove("native")
     _UC_PRESET = UC_PRESET[:]
-    if model in ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated"]:
+    if model in ["nai-diffusion-5-full", "nai-diffusion-5-curated"]:
+        return (
+            gr.update(visible=False),  # decrisp
+            gr.update(visible=False),  # variety
+            gr.update(visible=False),  # sm
+            gr.update(visible=False),  # legacy_uc
+            gr.update(choices=_SAMPLER + ["随机"]),  # sampler
+            gr.update(
+                value="karras", choices=["karras"], visible=False
+            ),  # noise_schedule
+            gr.update(choices=_UC_PRESET),  # uc_preset
+            gr.update(visible=True),  # furry_mode
+        )
+    elif model in ["nai-diffusion-4-5-full", "nai-diffusion-4-5-curated"]:
         if model == "nai-diffusion-4-5-curated":
             _UC_PRESET.remove("Furry Focus")
         return (
             gr.update(visible=False),  # decrisp
+            gr.update(visible=True),  # variety
             gr.update(visible=False),  # sm
             gr.update(visible=False),  # legacy_uc
             gr.update(choices=_SAMPLER + ["随机"]),  # sampler
-            gr.update(choices=_NOISE_SCHEDULE + ["随机"]),  # noise_schedule
+            gr.update(
+                choices=_NOISE_SCHEDULE + ["随机"], visible=True
+            ),  # noise_schedule
             gr.update(choices=_UC_PRESET),  # uc_preset
             gr.update(visible=True),  # furry_mode
         )
@@ -154,10 +179,13 @@ def update_components_for_models_change(model):
         _UC_PRESET.remove("Human Focus")
         return (
             gr.update(visible=False),  # decrisp
+            gr.update(visible=True),  # variety
             gr.update(visible=False),  # sm
             gr.update(visible=True),  # legacy_uc
             gr.update(choices=_SAMPLER + ["随机"]),  # sampler
-            gr.update(choices=_NOISE_SCHEDULE + ["随机"]),  # noise_schedule
+            gr.update(
+                choices=_NOISE_SCHEDULE + ["随机"], visible=True
+            ),  # noise_schedule
             gr.update(choices=_UC_PRESET),  # uc_preset
             gr.update(visible=True),  # furry_mode
         )
@@ -167,10 +195,13 @@ def update_components_for_models_change(model):
             _UC_PRESET.remove("Human Focus")
         return (
             gr.update(visible=True),  # decrisp
+            gr.update(visible=True),  # variety
             gr.update(visible=True),  # sm
             gr.update(visible=False),  # legacy_uc
             gr.update(choices=SAMPLER + ["随机"]),  # sampler
-            gr.update(choices=NOISE_SCHEDULE + ["随机"]),  # noise_schedule
+            gr.update(
+                choices=NOISE_SCHEDULE + ["随机"], visible=True
+            ),  # noise_schedule
             gr.update(choices=_UC_PRESET),  # uc_preset
             gr.update(visible=False),  # furry_mode
         )
@@ -180,6 +211,13 @@ def save_txt(txt, path="./plugins/anr_plugin_random_artists/artists.txt"):
     with open(path, "w", encoding="utf-8") as file:
         file.write(txt)
     return gr.update(value="已保存!", visible=True)
+
+
+def recover_txt(path="./plugins/anr_plugin_random_artists/artists_backup.txt"):
+    with open(path, "r", encoding="utf-8") as file:
+        txt = file.read()
+        save_txt(txt)
+    return txt, gr.update(value="已还原!", visible=True)
 
 
 def random_line_skip_blank(text: str):
@@ -298,6 +336,8 @@ def generate_random_artists(
             final_string = artists_positive.replace("__artists__", f",{artists_string}")
 
         model_function_map = {
+            "nai-diffusion-5-full": nai5ft2i,  # noqa
+            "nai-diffusion-5-curated": nai5ct2i,  # noqa
             "nai-diffusion-4-5-full": nai45ft2i,  # noqa
             "nai-diffusion-4-5-curated": nai45ct2i,  # noqa
             "nai-diffusion-4-full": nai4ft2i,  # noqa
@@ -336,6 +376,8 @@ def generate_random_artists(
 
         if vibe_file:
             model_function_map = {
+                # "nai-diffusion-5-full": nai5fvibe,  # noqa
+                # "nai-diffusion-5-curated": nai5cvibe,  # noqa
                 "nai-diffusion-4-5-full": nai45fvibe,  # noqa
                 "nai-diffusion-4-5-curated": nai45cvibe,  # noqa
                 "nai-diffusion-4-full": nai4fvibe,  # noqa
@@ -343,6 +385,8 @@ def generate_random_artists(
             }
             func = model_function_map.get(model)
             model_vibe_map = {
+                # "nai-diffusion-5-full": "v5full",
+                # "nai-diffusion-5-curated": "v5curated",
                 "nai-diffusion-4-5-full": "v4-5full",
                 "nai-diffusion-4-5-curated": "v4-5curated",
                 "nai-diffusion-4-full": "v4full",
@@ -370,17 +414,19 @@ def generate_random_artists(
 
         json_data = func(
             _input=format_str(
-                final_string + return_quality_tags(model)
-                if add_quality_tags
+                f"{final_string}, " + return_quality_tags(model, add_quality_tags)
+                if add_quality_tags != "None"
                 else final_string
             ),
+            params_version=4,
             width=return_x64(int(w)),
             height=return_x64(int(h)),
             scale=prompt_guidance,
             sampler=current_sampler,
             steps=steps,
-            ucPreset=return_uc_preset_data(model)[undesired_contentc_preset],
-            qualityToggle=add_quality_tags,
+            n_samples=1,
+            ucPresetId=return_uc_preset_id(model)[undesired_contentc_preset],
+            qualityPresetId=return_quality_preset_id(model)[add_quality_tags],
             autoSmea=False,
             dynamic_thresholding=(
                 random.choice([True, False])
@@ -391,10 +437,15 @@ def generate_random_artists(
                 )
                 else False
             ),
+            controlnet_strength=1,
             legacy=False,
             add_original_image=True,
             cfg_rescale=prompt_guidance_rescale,
-            noise_schedule=current_noise_schedule,
+            noise_schedule=(
+                "karras"
+                if model in ["nai-diffusion-5-full", "nai-diffusion-5-curated"]
+                else current_noise_schedule
+            ),
             legacy_v3_extend=False,
             skip_cfg_above_sigma=(
                 random.choice([return_skip_cfg_above_sigma(model), None])
@@ -403,6 +454,7 @@ def generate_random_artists(
             ),
             use_coords=False,
             normalize_reference_strength_multiple=True,
+            inpaintImg2ImgStrength=1,
             use_order=True,
             legacy_uc=(
                 legacy_uc
@@ -429,6 +481,7 @@ def generate_random_artists(
             v4_prompt_positive=[],
             v4_prompt_negative=[],
             characterPrompts=[],
+            straight_alpha=True,
         )
 
         with open("./outputs/temp_last_origin.json", "w", encoding="utf-8") as file:

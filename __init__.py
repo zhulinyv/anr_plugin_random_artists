@@ -4,6 +4,7 @@ import gradio as gr
 
 from plugins.anr_plugin_random_artists.utils import (
     generate_random_artists,
+    recover_txt,
     save_txt,
     update_components_for_models_change,
     update_from_dropdown,
@@ -16,7 +17,7 @@ from utils.components import (
     update_components_for_sm_change,
 )
 from utils.logger import logger
-from utils.variable import MODELS, NOISE_SCHEDULE, SAMPLER, UC_PRESET
+from utils.variable import MODELS, NOISE_SCHEDULE, QP_PRESET, SAMPLER, UC_PRESET
 
 
 def plugin():
@@ -38,14 +39,37 @@ def plugin():
                     scale=3,
                 )
                 with gr.Column(scale=1):
-                    furry_mode = gr.Button("🌸", visible=True)
-                    furry_mode.click(
-                        lambda x: "🐾" if x == "🌸" else "🌸",
-                        inputs=furry_mode,
-                        outputs=furry_mode,
-                    )
-                    add_quality_tags = gr.Checkbox(
-                        value=True, label="添加质量词", interactive=True
+                    with gr.Row():
+                        furry_mode = gr.Button("🌸", visible=True)
+                        furry_info = gr.Markdown("Mode: Anime", show_label=False)
+                        furry_mode.click(
+                            lambda x: (
+                                ("🐾", "Mode: Furry")
+                                if x == "🌸"
+                                else ("🌸", "Mode: Anime")
+                            ),
+                            inputs=furry_mode,
+                            outputs=[furry_mode, furry_info],
+                        )
+                    add_quality_tags = gr.Dropdown(
+                        choices=[
+                            x
+                            for x in QP_PRESET
+                            if x
+                            not in {
+                                "nai-diffusion-5-full": [],
+                                "nai-diffusion-5-curated": [],
+                                "nai-diffusion-4-5-full": ["Light"],
+                                "nai-diffusion-4-5-curated": ["Light"],
+                                "nai-diffusion-4-full": ["Light"],
+                                "nai-diffusion-4-curated-preview": ["Light"],
+                                "nai-diffusion-3": ["Light"],
+                                "nai-diffusion-furry-3": ["Light"],
+                            }.get("nai-diffusion-4-5-full", [])
+                        ],
+                        value="Standard",
+                        label="正面提示词预设",
+                        interactive=True,
                     )
                     gr.Markdown("<hr>")
                     artists_position = gr.Radio(
@@ -85,7 +109,7 @@ def plugin():
                     interactive=True,
                     scale=1,
                 )
-            gr.Markdown("可以在在固定的提示词中使用 wildcards")
+            gr.Markdown("可以在固定的提示词中使用 wildcards")
         with gr.Tab("参数设置"):
             with gr.Row():
                 with gr.Column():
@@ -236,6 +260,7 @@ def plugin():
                         inputs=model,
                         outputs=[
                             decrisp,
+                            variety,
                             sm,
                             legacy_uc,
                             sampler,
@@ -260,9 +285,20 @@ def plugin():
                         interactive=True,
                     )
                     vibe_button = gr.Button(generate_random_str(8))
+                    gr.Markdown("nai5 目前不支持 vibe")
                     vibe_state = gr.State(0)
-                    vibe_button.click(lambda x: x + 1 if x < 5 else 0, vibe_state, vibe_state)
-                    vibe_state.change(lambda x: gr.update(visible=True) if x == 5 else gr.update(value=None, visible=False), vibe_state, vibe_file)
+                    vibe_button.click(
+                        lambda x: x + 1 if x < 5 else 0, vibe_state, vibe_state
+                    )
+                    vibe_state.change(
+                        lambda x: (
+                            gr.update(visible=True)
+                            if x == 5
+                            else gr.update(value=None, visible=False)
+                        ),
+                        vibe_state,
+                        vibe_file,
+                    )
         with gr.Tab("画师设置"):
             with gr.Row():
                 with gr.Column():
@@ -280,6 +316,10 @@ def plugin():
                     save_message = gr.Markdown(show_label=False, visible=False)
                     open_file_button = gr.Button("保存文件")
                     open_file_button.click(save_txt, artists_area, save_message)
+                    recover_file_button = gr.Button("还原文件")
+                    recover_file_button.click(
+                        recover_txt, outputs=[artists_area, save_message]
+                    )
         with gr.Tab("概率设置"):
             with gr.Row():
                 with gr.Column(scale=1):
@@ -291,7 +331,13 @@ def plugin():
                     )
 
                     years = gr.CheckboxGroup(
-                        ["year_2022", "year_2023", "year_2024", "year_2025"],
+                        [
+                            "year_2022",
+                            "year_2023",
+                            "year_2024",
+                            "year_2025",
+                            "year_2026",
+                        ],
                         show_label=False,
                     )
 
