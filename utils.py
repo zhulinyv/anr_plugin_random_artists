@@ -19,10 +19,10 @@ from utils.helpers import (
     find_and_replace_wildcards_from_dict,
     format_str,
     read_json,
+    reset_stop,
     return_last_value,
     return_x64,
     sleep_for_cool,
-    sleep_interruptible,
 )
 from utils.logger import logger
 from utils.models import *  # noqa: F401,F403
@@ -236,8 +236,7 @@ def generate_random_artists(values: dict):
     vibe_file = values.get("vibe_file", None)
 
     os.makedirs("./outputs", exist_ok=True)
-    with open("./outputs/temp_break.json", "w") as f:
-        json.dump({"break": False}, f)
+    reset_stop()  # 重置本任务的停止信号 (生图队列按任务独立管理)
 
     count = 0
     while count < 1000:
@@ -405,6 +404,7 @@ def generate_random_artists(values: dict):
             logger.info("正在重试...")
 
         yield artists_string, path
-        sleep_interruptible(1.5)
+        # 图与图之间冷却: 尊重配置设置的冷却时间 (与主生成器多图间隔一致), 期间可随时停止
+        sleep_for_cool(env.cool_time)
 
     # 正常结束时 (被停止) 也返回最后一次结果
