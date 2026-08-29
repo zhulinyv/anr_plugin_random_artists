@@ -22,6 +22,7 @@ def register(plugin: Plugin):
             Action(
                 id="generate",
                 label="🚀 开始生成",
+                uses_novelai=True,  # 调用 NovelAI 生图 API: 进入生图队列
                 output="auto",
                 show_output=False,
                 inputs=[
@@ -116,9 +117,9 @@ def register(plugin: Plugin):
             Field(id="add_artist", label="artist 前缀", type="checkbox", default=False),
         ],
         actions=[
-            Action(id="save", label="💾 保存文件", inputs=["artists_area"], show_output=False, stop=False,
+            Action(id="save", label="💾 保存文件", inputs=["artists_area"], show_output=False, stop=False, uses_novelai=False,
                    handler=lambda v: {"text": save_txt(v.get("artists_area", ""))}),
-            Action(id="recover", label="🔄 还原文件", inputs=[], show_output=False, set_field="artists_area", stop=False,
+            Action(id="recover", label="🔄 还原文件", inputs=[], show_output=False, set_field="artists_area", stop=False, uses_novelai=False,
                    handler=lambda v: {"text": "已还原!", "content": recover_txt()}),
         ],
     )
