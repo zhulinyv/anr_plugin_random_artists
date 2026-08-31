@@ -183,6 +183,16 @@ def recover_txt(path=ARTISTS_BACKUP):
     return txt
 
 
+def load_artists_default():
+    """加载画师列表默认值: 优先读取 artists.txt, 若不存在 (如首次克隆未生成) 则从备份恢复, 避免插件加载失败。"""
+    if os.path.exists(ARTISTS_FILE):
+        with open(ARTISTS_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    if os.path.exists(ARTISTS_BACKUP):
+        return recover_txt()
+    return ""
+
+
 def random_line_skip_blank(text: str):
     lines = [line for line in text.splitlines() if line.strip()]
     return random.choice(lines) if lines else ""

@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from plugins.anr_plugin_random_artists.utils import (
     generate_random_artists,
+    load_artists_default,
     recover_txt,
     save_txt,
 )
-from utils.helpers import read_txt
 from utils.plugins import Action, Field, Panel, Plugin
 
 
@@ -113,7 +113,7 @@ def register(plugin: Plugin):
                 "./plugins/anr_plugin_random_artists 目录下的 artists.txt, 若不想每次启动后都修改左侧文本区域中的画师提示词"
                 "可以修改后点击保存文件, 若想还原该文件的修改只需将 artists_backup.txt 文件内容复制到 artists.txt"
             )),
-            Field(id="artists_area", label="单画师提示词或光影质量提示词等", type="textarea", rows=8, default=read_txt("./plugins/anr_plugin_random_artists/artists.txt"), autocomplete=True, autosize=True),
+            Field(id="artists_area", label="单画师提示词或光影质量提示词等", type="textarea", rows=8, default=load_artists_default(), autocomplete=True, autosize=True),
             Field(id="add_artist", label="artist 前缀", type="checkbox", default=False),
         ],
         actions=[
