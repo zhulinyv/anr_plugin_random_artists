@@ -1,11 +1,12 @@
 """随机画风插件核心逻辑: 分段 Beta 分布权重 + 随机抽取画师 + 生图。"""
+
 from __future__ import annotations
 
 import os
 import random
-import time
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -140,15 +141,31 @@ def sample_piecewise_beta_numpy(
     return np.where(ends5, num2, np.round(num2, 1))
 
 
-def visualize_beta_distribution(a, b, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add):
+def visualize_beta_distribution(
+    a, b, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add
+):
     """生成分布图并返回图片路径 (向量化采样 + 降低 dpi, 速度大幅提升)。"""
     data = sample_piecewise_beta_numpy(
-        30000, a=a, b=b, mode=mode, left_sharpness=left_sharpness,
-        right_sharpness=right_sharpness, prob_neg_to_pos=prob_neg_to_pos,
+        30000,
+        a=a,
+        b=b,
+        mode=mode,
+        left_sharpness=left_sharpness,
+        right_sharpness=right_sharpness,
+        prob_neg_to_pos=prob_neg_to_pos,
         prob_zero_to_one_add=prob_zero_to_one_add,
     )
     plt.figure(figsize=(10, 6))
-    plt.hist(data, bins=120, density=True, alpha=0.7, color="mediumseagreen", edgecolor="black", linewidth=0.5, label="Histogram")
+    plt.hist(
+        data,
+        bins=120,
+        density=True,
+        alpha=0.7,
+        color="mediumseagreen",
+        edgecolor="black",
+        linewidth=0.5,
+        label="Histogram",
+    )
     kde = gaussian_kde(data)
     x_range = np.linspace(data.min(), data.max(), 500)
     plt.plot(x_range, kde(x_range), color="c", linewidth=2, label="KDE")
@@ -256,8 +273,11 @@ def generate_random_artists(values: dict):
         count += 1
         logger.info("正在生成图片...")
 
-        if furry_mode and model not in ["nai-diffusion-3", "nai-diffusion-furry-3"]:
-            artists_positive = "fur dataset, " + artists_positive
+        _positive_input = (
+            "fur dataset, " + artists_positive
+            if furry_mode and model not in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+            else artists_positive
+        )  # 临时变量, 不污染 artists_positive (与 src/generate_images.py:362-366 的正确写法对齐)
 
         lines = artists_area.splitlines()
         non_blank_artists = [line.strip() for line in lines if line.strip()] or [""]
@@ -279,7 +299,11 @@ def generate_random_artists(values: dict):
                     if "使用{}" in use_parentheses:
                         parentheses_list.append(["{", "}"])
                     num = random.randint(min_num, max_num)
-                    symbol = random.choice(parentheses_list) if parentheses_list else ["", ""]
+                    symbol = (
+                        random.choice(parentheses_list)
+                        if parentheses_list
+                        else ["", ""]
+                    )
                     artists_string += symbol[0] * num + artist + symbol[1] * num + ", "
             else:
                 artists_string += f"{artist},"
@@ -289,21 +313,21 @@ def generate_random_artists(values: dict):
                 artists_string += f"{year},"
 
         if artists_position == "最前面":
-            final_string = f"{artists_string},{artists_positive}"
+            final_string = f"{artists_string},{_positive_input}"
         elif artists_position == "最后面":
-            final_string = f"{artists_positive},{artists_string}"
+            final_string = f"{_positive_input},{artists_string}"
         else:
-            final_string = artists_positive.replace("__artists__", f",{artists_string}")
+            final_string = _positive_input.replace("__artists__", f",{artists_string}")
 
         model_function_map = {
-            "nai-diffusion-5-full": nai5ft2i,
-            "nai-diffusion-5-curated": nai5ct2i,
-            "nai-diffusion-4-5-full": nai45ft2i,
-            "nai-diffusion-4-5-curated": nai45ct2i,
-            "nai-diffusion-4-full": nai4ft2i,
-            "nai-diffusion-4-curated-preview": nai4cpt2i,
-            "nai-diffusion-3": nai3t2i,
-            "nai-diffusion-furry-3": naif3t2i,
+            "nai-diffusion-5-full": nai5ft2i,  # noqa
+            "nai-diffusion-5-curated": nai5ct2i,  # noqa
+            "nai-diffusion-4-5-full": nai45ft2i,  # noqa
+            "nai-diffusion-4-5-curated": nai45ct2i,  # noqa
+            "nai-diffusion-4-full": nai4ft2i,  # noqa
+            "nai-diffusion-4-curated-preview": nai4cpt2i,  # noqa
+            "nai-diffusion-3": nai3t2i,  # noqa
+            "nai-diffusion-furry-3": naif3t2i,  # noqa
         }
         func = model_function_map.get(model)
 
@@ -314,8 +338,24 @@ def generate_random_artists(values: dict):
         else:
             w, h = resolution.split("x")
 
-        current_sampler = random.choice(SAMPLER if model in ["nai-diffusion-3", "nai-diffusion-furry-3"] else [x for x in SAMPLER if x != "ddim_v3"]) if sampler == "随机" else sampler
-        current_noise = random.choice(NOISE_SCHEDULE if model in ["nai-diffusion-3", "nai-diffusion-furry-3"] else [x for x in NOISE_SCHEDULE if x != "native"]) if noise_schedule == "随机" else noise_schedule
+        current_sampler = (
+            random.choice(
+                SAMPLER
+                if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                else [x for x in SAMPLER if x != "ddim_v3"]
+            )
+            if sampler == "随机"
+            else sampler
+        )
+        current_noise = (
+            random.choice(
+                NOISE_SCHEDULE
+                if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                else [x for x in NOISE_SCHEDULE if x != "native"]
+            )
+            if noise_schedule == "随机"
+            else noise_schedule
+        )
 
         reference_image_multiple = []
         reference_information_extracted_multiple = []
@@ -323,10 +363,10 @@ def generate_random_artists(values: dict):
 
         if vibe_file:
             model_function_map = {
-                "nai-diffusion-4-5-full": nai45fvibe,
-                "nai-diffusion-4-5-curated": nai45cvibe,
-                "nai-diffusion-4-full": nai4fvibe,
-                "nai-diffusion-4-curated-preview": nai4cpvibe,
+                "nai-diffusion-4-5-full": nai45fvibe,  # noqa
+                "nai-diffusion-4-5-curated": nai45cvibe,  # noqa
+                "nai-diffusion-4-full": nai4fvibe,  # noqa
+                "nai-diffusion-4-curated-preview": nai4cpvibe,  # noqa
             }
             func = model_function_map.get(model, func)
             model_vibe_map = {
@@ -340,14 +380,30 @@ def generate_random_artists(values: dict):
             if vibe_model_name:
                 try:
                     for vibe_image in vibe_data["vibes"]:
-                        reference_image_multiple.append(return_last_value(vibe_image["encodings"][vibe_model_name])["encoding"])
-                        reference_strength_multiple.append(vibe_image["importInfo"]["strength"])
+                        reference_image_multiple.append(
+                            return_last_value(vibe_image["encodings"][vibe_model_name])[
+                                "encoding"
+                            ]
+                        )
+                        reference_strength_multiple.append(
+                            vibe_image["importInfo"]["strength"]
+                        )
                 except KeyError:
-                    reference_image_multiple.append(return_last_value(vibe_data["encodings"][vibe_model_name])["encoding"])
-                    reference_strength_multiple.append(vibe_data["importInfo"]["strength"])
+                    reference_image_multiple.append(
+                        return_last_value(vibe_data["encodings"][vibe_model_name])[
+                            "encoding"
+                        ]
+                    )
+                    reference_strength_multiple.append(
+                        vibe_data["importInfo"]["strength"]
+                    )
 
         json_data = func(
-            _input=format_str(f"{final_string}, " + return_quality_tags(model, add_quality_tags) if add_quality_tags != "None" else final_string),
+            _input=format_str(
+                f"{final_string}, " + return_quality_tags(model, add_quality_tags)
+                if add_quality_tags != "None"
+                else final_string
+            ),
             params_version=4,
             width=return_x64(int(w)),
             height=return_x64(int(h)),
@@ -358,21 +414,48 @@ def generate_random_artists(values: dict):
             ucPresetId=return_uc_preset_id(model)[undesired_contentc_preset],
             qualityPresetId=return_quality_preset_id(model)[add_quality_tags],
             autoSmea=False,
-            dynamic_thresholding=(random.random() < checkbox_prob if (decrisp if model in ["nai-diffusion-3", "nai-diffusion-furry-3"] else False) else False),
+            dynamic_thresholding=(
+                random.random() < checkbox_prob
+                if (
+                    decrisp
+                    if model in ["nai-diffusion-3", "nai-diffusion-furry-3"]
+                    else False
+                )
+                else False
+            ),
             controlnet_strength=1,
             legacy=False,
             add_original_image=True,
             cfg_rescale=prompt_guidance_rescale,
-            noise_schedule="karras" if model in ["nai-diffusion-5-full", "nai-diffusion-5-curated"] else current_noise,
+            noise_schedule=(
+                "karras"
+                if model in ["nai-diffusion-5-full", "nai-diffusion-5-curated"]
+                else current_noise
+            ),
             legacy_v3_extend=False,
-            skip_cfg_above_sigma=(return_skip_cfg_above_sigma(model) if (variety and random.random() < checkbox_prob) else None),
+            skip_cfg_above_sigma=(
+                return_skip_cfg_above_sigma(model)
+                if (variety and random.random() < checkbox_prob)
+                else None
+            ),
             use_coords=False,
             normalize_reference_strength_multiple=True,
             inpaintImg2ImgStrength=1,
             use_order=True,
-            legacy_uc=legacy_uc if model in ["nai-diffusion-4-full", "nai-diffusion-4-curated-preview"] else False,
+            legacy_uc=(
+                legacy_uc
+                if model in ["nai-diffusion-4-full", "nai-diffusion-4-curated-preview"]
+                else False
+            ),
             seed=random.randint(1000000000, 9999999999) if seed == "-1" else int(seed),
-            negative_prompt=format_str(return_undesired_contentc_preset(model, undesired_contentc_preset) + (f", {artists_negative}" if undesired_contentc_preset != "None" else artists_negative)),
+            negative_prompt=format_str(
+                return_undesired_contentc_preset(model, undesired_contentc_preset)
+                + (
+                    f", {artists_negative}"
+                    if undesired_contentc_preset != "None"
+                    else artists_negative
+                )
+            ),
             deliberate_euler_ancestral_bug=False,
             prefer_brownian=True,
             use_new_shared_trial=True,
@@ -397,7 +480,9 @@ def generate_random_artists(values: dict):
                 logger.warning("已停止生成!")
                 break
             try:
-                image_data = generator.generate(find_and_replace_wildcards_from_dict(json_data))
+                image_data = generator.generate(
+                    find_and_replace_wildcards_from_dict(json_data)
+                )
             except Exception as e:
                 logger.error(f"网络或请求异常: {e}")
                 logger.opt(exception=True).debug("生成请求异常堆栈:")
@@ -407,7 +492,9 @@ def generate_random_artists(values: dict):
                 logger.warning("已停止生成!")
                 break
             if image_data:
-                path = generator.save(image_data, "text2image", json_data["parameters"]["seed"])
+                path = generator.save(
+                    image_data, "text2image", json_data["parameters"]["seed"]
+                )
                 break
             # 失败: 等待后重试 (等待期间检测停止信号, 可被立即打断)
             sleep_for_cool(env.cool_time)
