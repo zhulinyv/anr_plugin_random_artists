@@ -5,13 +5,33 @@ from __future__ import annotations
 import os
 import random
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import ujson as json  # noqa: E402
-from scipy.stats import gaussian_kde  # noqa: E402
+
+# matplotlib (0.45s) 与 scipy (0.86s) 只有画分布图那一个动作才用得上, 原来写在模块顶层
+# → 每次启动都白付 1.3 秒。改成用时再 import (见 _pyplot()), 首次调用后 sys.modules 会缓存, 不重复付。
+
+
+def _pyplot():
+    """按需加载 matplotlib (Agg 后端) 并返回 pyplot。"""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
+def _gaussian_kde():
+    from scipy.stats import gaussian_kde
+
+    return gaussian_kde
+
+
+def warmup() -> None:
+    """后台预热: 启动时提前把 matplotlib / scipy 加载好 (由 utils.plugins 在后台线程调用)。"""
+    _pyplot()
+    _gaussian_kde()
 
 from utils.config import env
 from utils.generator import Generator
@@ -145,6 +165,8 @@ def visualize_beta_distribution(
     a, b, mode, left_sharpness, right_sharpness, prob_neg_to_pos, prob_zero_to_one_add
 ):
     """生成分布图并返回图片路径 (向量化采样 + 降低 dpi, 速度大幅提升)。"""
+    plt = _pyplot()
+    gaussian_kde = _gaussian_kde()
     data = sample_piecewise_beta_numpy(
         30000,
         a=a,

@@ -6,6 +6,7 @@ from plugins.anr_plugin_random_artists.utils import (
     load_artists_default,
     recover_txt,
     save_txt,
+    warmup,
 )
 from utils.plugins import Action, Field, Panel, Plugin
 
@@ -192,3 +193,5 @@ def register(plugin: Plugin):
     plugin.description = "随机抽取画师与权重生成风格化预览图"
     plugin.icon = "🎲"
     plugin.panels.extend([preview_panel, prompt_panel, params_panel, artists_panel, prob_panel])
+    # 后台预热 matplotlib / scipy (只在画分布图时才需要): 插件提前就绪, 首次点击不必等
+    plugin.warmup = warmup
